@@ -9,7 +9,7 @@ own draggable, minimizable window, with a Start menu and taskbar.
 On the computer (needs HTTP enabled for `wget`, or use the pastebin route):
 
 ```
-wget https://raw.githubusercontent.com/levisnakes/cc-os/main/install.lua install.lua
+wget https://raw.githubusercontent.com/levisnakes/cc-os/master/install.lua install.lua
 install.lua
 reboot
 ```
