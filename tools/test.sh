@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Full cc-OS test suite: lint, installer, kernel, and every bundled app.
+# Run from the tools/ directory.
+set -u
+cd "$(dirname "$0")"
+
+fail=0
+run() {
+  local label="$1"; shift
+  local out
+  if out=$(node run.mjs "$@" 2>&1); then
+    echo "  PASS  $label"
+  else
+    echo "  FAIL  $label"
+    echo "$out" | sed 's/^/        /' | tail -20
+    fail=1
+  fi
+}
+
+echo "== single-file bundle =="
+if python build_bundle.py > out/bundle.txt 2>&1; then
+  echo "  PASS  $(tail -1 out/bundle.txt)"
+else
+  echo "  FAIL  building install.lua"
+  sed 's/^/        /' out/bundle.txt
+  fail=1
+fi
+run "installer unpacks and boots" tests/t_install.lua
+
+echo "== every app module loads =="
+run "module registry" tests/t_load.lua
+
+echo "== kernel =="
+run "start menu, drag, minimize, close" tests/t_boot.lua
+
+echo "== apps =="
+run "editor, files, calculator, terminal, snake, settings" tests/t_apps.lua
+run "chat + file share over the modem" tests/t_net.lua
+run "alarms + notes" tests/t_clock_notes.lua
+
+echo
+if [ "$fail" -eq 0 ]; then
+  echo "ALL TESTS PASSED"
+else
+  echo "SOME TESTS FAILED"
+fi
+exit $fail
