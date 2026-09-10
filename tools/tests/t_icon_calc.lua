@@ -1,0 +1,10 @@
+local Canvas = require_os("lib.canvas")
+local icons = require_os("lib.icons")
+
+term.setBackgroundColor(colors.black)
+term.clear()
+local c = Canvas.new(1, 1, 6, 5, colors.black)
+icons.draw(c, "calc", 1, 1)
+c:render()
+SHOT("calc_solo")
+finish("icon_calc")

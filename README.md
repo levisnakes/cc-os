@@ -25,7 +25,8 @@ rebooting, run `cc-os`.
 
 ## Using it
 
-- **Start menu**: click `Start` in the bottom-left corner, then click an app.
+- **Start menu**: click `Start` in the bottom-left corner for a full-screen
+  icon grid of every app.
 - **Desktop icons**: double-click an icon on the desktop to launch it.
 - **Move a window**: drag its titlebar.
 - **Resize**: drag the `\` handle in a window's bottom-right corner.
@@ -97,9 +98,33 @@ buffers to PNGs (`tools/render.py`) for visual review.
 - `disk/os/lib/` -- shared code: `theme.lua` (colour presets), `widgets.lua`
   (buttons, text fields, list boxes), `data.lua`/`store.lua` (settings and
   per-app persistence), `net.lua` (the Chat/File Share wire protocol),
-  `apps.lua` (the Start menu registry), `sound.lua` (UI sound effects).
+  `apps.lua` (the Start menu registry), `sound.lua` (UI sound effects),
+  `canvas.lua`/`font.lua`/`icons.lua` (the pixel-art layer, see below).
 - `disk/os/apps/` -- one file per app.
 
 Resizing/maximizing a window sends the app a `term_resize` event; every
 bundled app re-reads `ctx.api.getSize()` and redraws at the new size (Snake
 is the one deliberate exception -- its grid is fixed for the life of a game).
+
+### Graphics: sub-pixel icons, not letters in brackets
+
+CC:Tweaked's font supports one extra trick beyond plain text: character
+codes 128-191 render as a 2x3 grid of sub-pixel blocks, so a character cell
+that can normally only show one glyph can instead show any 2-colour
+combination of 6 smaller "pixels". That turns the 51x19 terminal into a
+102x57 pixel canvas with roughly square pixels -- as fine-grained as
+CC:Tweaked's text-mode font gets (there's no further "sub-sub-pixel" step
+past this; a graphics card peripheral from another mod would be the only way
+to go finer). `disk/os/lib/canvas.lua` implements that framebuffer (fill,
+line, circle, sprite blitting, all folding down to blit calls on render);
+`font.lua` is a 4x5 pixel font drawn on top of it, used for the boot splash's
+wordmark. `disk/os/lib/icons.lua` draws all 12 app icons with it, and the
+kernel uses those same icons for desktop icons, the Start menu grid, and a
+small colour swatch on every titlebar and taskbar button -- nothing in the
+UI identifies an app with a single letter anymore.
+
+One real bug this caught: an icon only renders cleanly if each *character
+cell* it touches holds at most 2 colours (the canvas folds a 3rd-colour
+minority pixel away). `tools/tests/t_icon_calc.lua` exists because the
+calculator icon's first draft did exactly that -- pin it down if you add
+more icons and something looks muddy.

@@ -1,6 +1,6 @@
 --[[ cc-OS installer -- the whole OS in one file.
 
-  This writes 23 files and then you are done. Nothing is downloaded, so
+  This writes 26 files and then you are done. Nothing is downloaded, so
   it works on a computer with HTTP disabled.
 
     install            unpack into this computer
@@ -1855,6 +1855,9 @@ local widgets = req("lib.widgets")
 local data = req("lib.data")
 local appsReg = req("lib.apps")
 local sound = req("lib.sound")
+local Canvas = req("lib.canvas")
+local icons = req("lib.icons")
+local font = req("lib.font")
 
 local kernel = {}
 local MIN_W, MIN_H = 18, 7
@@ -1903,15 +1906,17 @@ function kernel.run(opts)
   local altHeld = false
 
   --------------------------------------------------------------- desktop icons
-  local icons = {}
+  -- each slot is 9 cols wide (a 4-cell/8px icon plus padding) and 4 rows tall
+  -- (3 cell rows of icon, 1 text row of label underneath)
+  local deskIcons = {}
   do
-    local perCol = math.max(1, math.floor(desktopH / 2))
+    local perCol = math.max(1, math.floor(desktopH / 4))
     for i = 1, #appsReg.list do
       local a = appsReg.list[i]
       local col = math.floor((i - 1) / perCol)
       local row = (i - 1) % perCol
-      icons[#icons + 1] = { appId = a.id, name = a.name, icon = a.icon,
-        x = 1 + col * 9, y = 1 + row * 2 }
+      deskIcons[#deskIcons + 1] = { appId = a.id, name = a.name,
+        x = 1 + col * 9, y = 1 + row * 4 }
     end
   end
   local lastIconClick = { appId = nil, t = -10 }
@@ -2200,9 +2205,13 @@ function kernel.run(opts)
     term.setTextColor(barFg)
     term.setCursorPos(p.x, p.y)
     term.write(string.rep(" ", p.w))
-    local titleW = p.w - 12
+    term.setBackgroundColor(icons.COLOR[p.appId] or barBg)
+    term.setCursorPos(p.x + 1, p.y)
+    term.write(" ")
+    term.setBackgroundColor(barBg)
+    local titleW = p.w - 14
     if titleW > 0 then
-      term.setCursorPos(p.x + 1, p.y)
+      term.setCursorPos(p.x + 3, p.y)
       local title = (p.crashed and "[!] " or "") .. p.title
       term.write(widgets.clip(title, titleW))
     end
@@ -2230,13 +2239,14 @@ function kernel.run(opts)
   function drawIcons()
     local th = currentTheme
     term.setBackgroundColor(th.desktop)
-    for i = 1, #icons do
-      local ic = icons[i]
-      term.setTextColor(th.accent2)
-      term.setCursorPos(ic.x, ic.y)
-      term.write("[" .. ic.icon .. "]")
+    for i = 1, #deskIcons do
+      local ic = deskIcons[i]
+      local c = Canvas.new(ic.x, ic.y, icons.CELLS.w, icons.CELLS.h, th.desktop)
+      icons.draw(c, ic.appId, 1, 1)
+      c:render()
+      term.setBackgroundColor(th.desktop)
       term.setTextColor(th.desktopText)
-      term.setCursorPos(ic.x, ic.y + 1)
+      term.setCursorPos(ic.x, ic.y + icons.CELLS.h)
       term.write(widgets.clip(ic.name, 8))
     end
   end
@@ -2259,12 +2269,16 @@ function kernel.run(opts)
     for i = 1, #procs do
       local p = procs[i]
       local label = " " .. widgets.clip(p.title, 8) .. " "
-      local w = #label
+      local w = #label + 1 -- +1 for the leading colour swatch
       if cx + w > screenW - 7 then break end
       local isFocused = (p.id == focusedId) and not p.minimized
-      term.setBackgroundColor(isFocused and th.taskbarActive or th.taskbar)
-      term.setTextColor(p.crashed and th.err or (isFocused and th.taskbarActiveText or th.taskbarText))
+      local barBg = isFocused and th.taskbarActive or th.taskbar
+      term.setBackgroundColor(icons.COLOR[p.appId] or barBg)
       term.setCursorPos(cx, screenH)
+      term.write(" ")
+      term.setBackgroundColor(barBg)
+      term.setTextColor(p.crashed and th.err or (isFocused and th.taskbarActiveText or th.taskbarText))
+      term.setCursorPos(cx + 1, screenH)
       term.write(label)
       taskbarButtons[#taskbarButtons + 1] = { procId = p.id, x = cx, w = w }
       cx = cx + w + 1
@@ -2289,22 +2303,36 @@ function kernel.run(opts)
     end
   end
 
+  -- a 4-column icon grid, each cell 9 cols wide (icon + padding) x 4 rows
+  -- tall (3 rows of icon, 1 row of label) -- the same visual language as
+  -- the desktop icons, so the Start menu reads as "more of the same app
+  -- launcher" rather than a different, plainer UI bolted on.
+  local MENU_COLS = 4
   function drawStartMenu()
     if not startMenuOpen then return end
+    local th = currentTheme
     local list = appsReg.list
-    local w = 18
-    for i = 1, #list do w = math.max(w, #list[i].name + 5) end
-    local h = #list
-    local x, y = 1, screenH - h
-    menuRect = { x = x, y = y, w = w, h = h }
+    local w = MENU_COLS * 9
+    local x, y = 1, 1
+    -- the panel covers the full desktop height so it fully occludes
+    -- whatever desktop icons are behind it, not just the grid's own rows
+    menuRect = { x = x, y = y, w = w, h = desktopH }
     menuItems = {}
-    local rows = {}
+    widgets.fill(x, y, w, desktopH, th.chrome)
     for i = 1, #list do
       local a = list[i]
-      rows[i] = a.icon .. "  " .. a.name
-      menuItems[#menuItems + 1] = { x = x, y = y + i - 1, w = w, h = 1, appId = a.id }
+      local col = (i - 1) % MENU_COLS
+      local row = math.floor((i - 1) / MENU_COLS)
+      local cx, cy = x + col * 9, y + row * 4
+      local c = Canvas.new(cx, cy, icons.CELLS.w, icons.CELLS.h, th.chrome)
+      icons.draw(c, a.id, 1, 1)
+      c:render()
+      term.setBackgroundColor(th.chrome)
+      term.setTextColor(th.chromeText)
+      term.setCursorPos(cx, cy + icons.CELLS.h)
+      term.write(widgets.clip(a.name, 8))
+      menuItems[#menuItems + 1] = { x = cx, y = cy, w = 9, h = 4, appId = a.id }
     end
-    drawPopup(x, y, w, rows)
   end
 
   local function drawContextMenu()
@@ -2351,9 +2379,9 @@ function kernel.run(opts)
   end
 
   local function iconAt(x, y)
-    for i = 1, #icons do
-      local ic = icons[i]
-      if x >= ic.x and x < ic.x + 8 and y >= ic.y and y <= ic.y + 1 then return ic end
+    for i = 1, #deskIcons do
+      local ic = deskIcons[i]
+      if x >= ic.x and x < ic.x + 8 and y >= ic.y and y < ic.y + 4 then return ic end
     end
     return nil
   end
@@ -2551,18 +2579,11 @@ function kernel.run(opts)
   ------------------------------------------------------------- boot splash
   local function bootSplash()
     if opts.skipSplash then return end
-    term.setBackgroundColor(colors.black)
-    term.setTextColor(colors.white)
-    term.clear()
-    local midY = math.floor(screenH / 2)
-    local label = "cc-OS"
-    term.setTextColor(colors.cyan)
-    term.setCursorPos(math.max(1, math.floor((screenW - #label) / 2)), midY - 1)
-    term.write(label)
-    term.setTextColor(colors.lightGray)
-    local sub = "starting up..."
-    term.setCursorPos(math.max(1, math.floor((screenW - #sub) / 2)), midY + 1)
-    term.write(sub)
+    local full = Canvas.new(1, 1, screenW, screenH, colors.black)
+    local midY = math.floor(full.h / 2)
+    font.centerShadow(full, midY - 9, "CC-OS", colors.cyan, colors.gray, 2, 2)
+    font.center(full, midY + 8, "STARTING UP", colors.lightGray, 1, 1)
+    full:render()
     sound.play("boot")
     os.sleep(opts.splashSeconds or 0.6)
   end
@@ -2688,6 +2709,275 @@ end
 
 return apps
 ]=])
+file("os/lib/canvas.lua", [=[
+--[[ canvas -- a square-pixel framebuffer on top of the terminal.
+
+  Each character cell holds a 2x3 grid of sub-pixels, so a full 51x19 screen
+  becomes 102x57 pixels that are square on screen (3x3 real pixels each).
+
+  A cell can only carry two colours, so on render each cell picks its two most
+  common sub-pixel colours; anything else in that cell is folded into the
+  foreground. Blocky game art stays exact, gradients degrade gracefully.
+]]
+
+local Canvas = {}
+Canvas.__index = Canvas
+
+local floor = math.floor
+local schar = string.char
+local concat = table.concat
+
+local BLIT = {}
+do
+  local hex = "0123456789abcdef"
+  local c = 1
+  for i = 1, 16 do BLIT[c] = hex:sub(i, i) c = c * 2 end
+end
+
+--- Create a canvas occupying a character rectangle of the 51x19 screen.
+function Canvas.new(cx, cy, cw, ch, clearColour)
+  local self = setmetatable({}, Canvas)
+  self.cx, self.cy = cx, cy
+  self.cw, self.ch = cw, ch
+  self.w, self.h = cw * 2, ch * 3
+  self.bg = clearColour or colors.black
+  self.px = {}
+  local px = self.px
+  for i = 1, self.w * self.h do px[i] = self.bg end
+  self._c, self._f, self._b, self._t = {}, {}, {}, {}
+  return self
+end
+
+function Canvas:clear(col)
+  col = col or self.bg
+  local px = self.px
+  for i = 1, self.w * self.h do px[i] = col end
+end
+
+function Canvas:set(x, y, col)
+  x, y = floor(x), floor(y)
+  if x < 1 or y < 1 or x > self.w or y > self.h then return end
+  self.px[(y - 1) * self.w + x] = col
+end
+
+function Canvas:get(x, y)
+  x, y = floor(x), floor(y)
+  if x < 1 or y < 1 or x > self.w or y > self.h then return nil end
+  return self.px[(y - 1) * self.w + x]
+end
+
+--- Filled rectangle: top-left (x,y), size w*h, clipped to the canvas.
+function Canvas:fill(x, y, w, h, col)
+  x, y, w, h = floor(x), floor(y), floor(w), floor(h)
+  if w <= 0 or h <= 0 then return end
+  local x2, y2 = x + w - 1, y + h - 1
+  if x < 1 then x = 1 end
+  if y < 1 then y = 1 end
+  if x2 > self.w then x2 = self.w end
+  if y2 > self.h then y2 = self.h end
+  if x > x2 or y > y2 then return end
+  local px, W = self.px, self.w
+  for yy = y, y2 do
+    local base = (yy - 1) * W
+    for xx = x, x2 do px[base + xx] = col end
+  end
+end
+
+function Canvas:box(x, y, w, h, col)
+  if w <= 0 or h <= 0 then return end
+  self:fill(x, y, w, 1, col)
+  self:fill(x, y + h - 1, w, 1, col)
+  self:fill(x, y, 1, h, col)
+  self:fill(x + w - 1, y, 1, h, col)
+end
+
+function Canvas:hline(x, y, w, col) self:fill(x, y, w, 1, col) end
+function Canvas:vline(x, y, h, col) self:fill(x, y, 1, h, col) end
+
+function Canvas:line(x0, y0, x1, y1, col)
+  x0, y0, x1, y1 = floor(x0), floor(y0), floor(x1), floor(y1)
+  local dx = math.abs(x1 - x0)
+  local dy = -math.abs(y1 - y0)
+  local sx = x0 < x1 and 1 or -1
+  local sy = y0 < y1 and 1 or -1
+  local err = dx + dy
+  local guard = dx - dy + 4
+  while guard > 0 do
+    guard = guard - 1
+    self:set(x0, y0, col)
+    if x0 == x1 and y0 == y1 then return end
+    local e2 = err + err
+    if e2 >= dy then err = err + dy x0 = x0 + sx end
+    if e2 <= dx then err = err + dx y0 = y0 + sy end
+  end
+end
+
+function Canvas:circle(cx, cy, r, col, filled)
+  cx, cy, r = floor(cx), floor(cy), floor(r)
+  if r < 0 then return end
+  local x, y, d = r, 0, 1 - r
+  while x >= y do
+    if filled then
+      self:fill(cx - x, cy + y, x + x + 1, 1, col)
+      self:fill(cx - x, cy - y, x + x + 1, 1, col)
+      self:fill(cx - y, cy + x, y + y + 1, 1, col)
+      self:fill(cx - y, cy - x, y + y + 1, 1, col)
+    else
+      self:set(cx + x, cy + y, col) self:set(cx - x, cy + y, col)
+      self:set(cx + x, cy - y, col) self:set(cx - x, cy - y, col)
+      self:set(cx + y, cy + x, col) self:set(cx - y, cy + x, col)
+      self:set(cx + y, cy - x, col) self:set(cx - y, cy - x, col)
+    end
+    y = y + 1
+    if d < 0 then
+      d = d + 2 * y + 1
+    else
+      x = x - 1
+      d = d + 2 * (y - x) + 1
+    end
+  end
+end
+
+------------------------------------------------------------------- sprites
+--- Build a sprite from rows of characters. Characters absent from `map`
+--- (or mapped to false) are transparent.
+function Canvas.sprite(rows, map)
+  local h = #rows
+  local w = 0
+  for i = 1, h do if #rows[i] > w then w = #rows[i] end end
+  local s = { w = w, h = h, px = {} }
+  for y = 1, h do
+    local row = rows[y]
+    for x = 1, w do
+      local ch = row:sub(x, x)
+      local v = map[ch]
+      s.px[(y - 1) * w + x] = v or false
+    end
+  end
+  return s
+end
+
+function Canvas:draw(x, y, spr, flipH, flipV)
+  x, y = floor(x), floor(y)
+  local w, h, sp = spr.w, spr.h, spr.px
+  for sy = 1, h do
+    local ry = flipV and (h - sy + 1) or sy
+    local base = (ry - 1) * w
+    local py = y + sy - 1
+    if py >= 1 and py <= self.h then
+      local rowBase = (py - 1) * self.w
+      for sx = 1, w do
+        local rx = flipH and (w - sx + 1) or sx
+        local col = sp[base + rx]
+        if col then
+          local pxx = x + sx - 1
+          if pxx >= 1 and pxx <= self.w then self.px[rowBase + pxx] = col end
+        end
+      end
+    end
+  end
+end
+
+--- Draw a sprite scaled up by an integer factor.
+function Canvas:drawScaled(x, y, spr, scale)
+  if scale == 1 then return self:draw(x, y, spr) end
+  local w, h, sp = spr.w, spr.h, spr.px
+  for sy = 1, h do
+    local base = (sy - 1) * w
+    for sx = 1, w do
+      local col = sp[base + sx]
+      if col then
+        self:fill(x + (sx - 1) * scale, y + (sy - 1) * scale, scale, scale, col)
+      end
+    end
+  end
+end
+
+-------------------------------------------------------------------- render
+--- Convert the pixel buffer into drawing characters and blit it out.
+function Canvas:render()
+  local px, W = self.px, self.w
+  local cw, ch = self.cw, self.ch
+  local C, F, B, T = self._c, self._f, self._b, self._t
+  local W2 = W + W
+  for row = 0, ch - 1 do
+    local base = row * 3 * W
+    for col = 1, cw do
+      local o = base + (col - 1) * 2
+      local a, b = px[o + 1], px[o + 2]
+      local c, d = px[o + W + 1], px[o + W + 2]
+      local e, f = px[o + W2 + 1], px[o + W2 + 2]
+      if a == b and a == c and a == d and a == e and a == f then
+        C[col] = " "
+        F[col] = "0"
+        B[col] = BLIT[a]
+      else
+        local bgc, fgc
+        -- Fast path: almost every non-uniform cell holds exactly two colours.
+        local na = 1
+        if b == a then na = na + 1 end
+        if c == a then na = na + 1 end
+        if d == a then na = na + 1 end
+        if e == a then na = na + 1 end
+        if f == a then na = na + 1 end
+        local z
+        if b ~= a then z = b
+        elseif c ~= a then z = c
+        elseif d ~= a then z = d
+        elseif e ~= a then z = e
+        else z = f end
+        local nz = 0
+        if b == z then nz = nz + 1 end
+        if c == z then nz = nz + 1 end
+        if d == z then nz = nz + 1 end
+        if e == z then nz = nz + 1 end
+        if f == z then nz = nz + 1 end
+
+        if na + nz == 6 then
+          if na >= nz then bgc, fgc = a, z else bgc, fgc = z, a end
+        else
+          -- three or more colours: keep the two most common, fold the rest in
+          T[1], T[2], T[3], T[4], T[5], T[6] = a, b, c, d, e, f
+          local bc, bn, sc, sn = nil, 0, nil, 0
+          for i = 1, 6 do
+            local v = T[i]
+            if v ~= bc and v ~= sc then
+              local n = 0
+              for j = 1, 6 do if T[j] == v then n = n + 1 end end
+              if n > bn then
+                sc, sn = bc, bn
+                bc, bn = v, n
+              elseif n > sn then
+                sc, sn = v, n
+              end
+            end
+          end
+          bgc = bc
+          fgc = sc or bc
+        end
+        local bits = 0
+        if a ~= bgc then bits = bits + 1 end
+        if b ~= bgc then bits = bits + 2 end
+        if c ~= bgc then bits = bits + 4 end
+        if d ~= bgc then bits = bits + 8 end
+        if e ~= bgc then bits = bits + 16 end
+        if f ~= bgc then bits = bits + 32 end
+        if bits >= 32 then
+          bits = 63 - bits
+          fgc, bgc = bgc, fgc
+        end
+        C[col] = schar(128 + bits)
+        F[col] = BLIT[fgc]
+        B[col] = BLIT[bgc]
+      end
+    end
+    term.setCursorPos(self.cx, self.cy + row)
+    term.blit(concat(C, "", 1, cw), concat(F, "", 1, cw), concat(B, "", 1, cw))
+  end
+end
+
+return Canvas
+]=])
 file("os/lib/data.lua", [=[
 --[[ data -- system settings, persisted at /os/data/settings.dat. ]]
 
@@ -2738,6 +3028,290 @@ function data.all()
 end
 
 return data
+]=])
+file("os/lib/font.lua", [=[
+--[[ font -- a 5-row pixel font drawn onto a canvas.
+
+  Glyphs are 4 pixels wide apart from M, N and W, which need 5 to stay
+  readable. Rows are listed top to bottom, "1" is an inked pixel. Lower case
+  is folded to upper case; unknown characters render as a blank.
+
+  Layout rule: a character cell holds three pixel rows and only two colours,
+  so put text baselines on y = 3k + 1 and leave at least six pixels between
+  lines of different colours. Lines that share a cell lose a colour.
+]]
+
+local font = { W = 4, H = 5 }
+
+local RAW = {
+  ["0"] = "0110 1001 1001 1001 0110",
+  ["1"] = "0010 0110 0010 0010 0111",
+  ["2"] = "1110 0001 0110 1000 1111",
+  ["3"] = "1110 0001 0110 0001 1110",
+  ["4"] = "1001 1001 1111 0001 0001",
+  ["5"] = "1111 1000 1110 0001 1110",
+  ["6"] = "0110 1000 1110 1001 0110",
+  ["7"] = "1111 0001 0010 0100 0100",
+  ["8"] = "0110 1001 0110 1001 0110",
+  ["9"] = "0110 1001 0111 0001 0110",
+  ["A"] = "0110 1001 1111 1001 1001",
+  ["B"] = "1110 1001 1110 1001 1110",
+  ["C"] = "0111 1000 1000 1000 0111",
+  ["D"] = "1110 1001 1001 1001 1110",
+  ["E"] = "1111 1000 1110 1000 1111",
+  ["F"] = "1111 1000 1110 1000 1000",
+  ["G"] = "0111 1000 1011 1001 0111",
+  ["H"] = "1001 1001 1111 1001 1001",
+  ["I"] = "1110 0100 0100 0100 1110",
+  ["J"] = "0011 0001 0001 1001 0110",
+  ["K"] = "1001 1010 1100 1010 1001",
+  ["L"] = "1000 1000 1000 1000 1111",
+  ["M"] = "10001 11011 10101 10001 10001",
+  ["N"] = "10001 11001 10101 10011 10001",
+  ["O"] = "0110 1001 1001 1001 0110",
+  ["P"] = "1110 1001 1110 1000 1000",
+  ["Q"] = "0110 1001 1001 1011 0111",
+  ["R"] = "1110 1001 1110 1010 1001",
+  ["S"] = "0111 1000 0110 0001 1110",
+  ["T"] = "1111 0100 0100 0100 0100",
+  ["U"] = "1001 1001 1001 1001 0110",
+  ["V"] = "1001 1001 1001 1010 0100",
+  ["W"] = "10001 10001 10101 11011 10001",
+  ["X"] = "1001 1001 0110 1001 1001",
+  ["Y"] = "1001 1001 0110 0100 0100",
+  ["Z"] = "1111 0001 0110 1000 1111",
+  [" "] = "0000 0000 0000 0000 0000",
+  ["."] = "0000 0000 0000 0000 0100",
+  [","] = "0000 0000 0000 0100 1000",
+  [":"] = "0000 0100 0000 0100 0000",
+  [";"] = "0000 0100 0000 0100 1000",
+  ["-"] = "0000 0000 1110 0000 0000",
+  ["+"] = "0000 0100 1110 0100 0000",
+  ["="] = "0000 1110 0000 1110 0000",
+  ["!"] = "0100 0100 0100 0000 0100",
+  ["?"] = "1110 0001 0110 0000 0100",
+  ["'"] = "0100 0100 0000 0000 0000",
+  ["\""] = "1010 1010 0000 0000 0000",
+  ["/"] = "0001 0010 0010 0100 1000",
+  ["\\"] = "1000 0100 0100 0010 0001",
+  ["("] = "0010 0100 0100 0100 0010",
+  [")"] = "0100 0010 0010 0010 0100",
+  ["["] = "0110 0100 0100 0100 0110",
+  ["]"] = "0110 0010 0010 0010 0110",
+  ["<"] = "0010 0100 1000 0100 0010",
+  [">"] = "0100 0010 0001 0010 0100",
+  ["*"] = "0000 1010 0100 1010 0000",
+  ["%"] = "1001 0010 0100 1000 1001",
+  ["#"] = "0101 1111 0101 1111 0101",
+  ["_"] = "0000 0000 0000 0000 1111",
+}
+
+-- Compile to lists of {x, y} offsets so drawing is a flat loop.
+font.glyphs = {}
+for ch, spec in pairs(RAW) do
+  local pts, y, w = {}, 0, 0
+  for row in spec:gmatch("%S+") do
+    if #row > w then w = #row end
+    for x = 1, #row do
+      if row:sub(x, x) == "1" then pts[#pts + 1] = { x - 1, y } end
+    end
+    y = y + 1
+  end
+  font.glyphs[ch] = { pts = pts, w = w }
+end
+
+local BLANK = font.glyphs[" "]
+
+function font.width(text, scale, spacing)
+  scale = scale or 1
+  spacing = spacing or 1
+  text = tostring(text):upper()
+  local n = #text
+  if n == 0 then return 0 end
+  local total = 0
+  for i = 1, n do
+    local g = font.glyphs[text:sub(i, i)] or BLANK
+    total = total + g.w * scale + spacing
+  end
+  return total - spacing
+end
+
+--- Draw text at pixel (x, y). Returns the x just past the last glyph.
+function font.draw(canvas, x, y, text, col, scale, spacing)
+  scale = scale or 1
+  spacing = spacing or 1
+  text = tostring(text):upper()
+  local gx = x
+  for i = 1, #text do
+    local g = font.glyphs[text:sub(i, i)] or BLANK
+    local pts = g.pts
+    for j = 1, #pts do
+      local p = pts[j]
+      if scale == 1 then
+        canvas:set(gx + p[1], y + p[2], col)
+      else
+        canvas:fill(gx + p[1] * scale, y + p[2] * scale, scale, scale, col)
+      end
+    end
+    gx = gx + g.w * scale + spacing
+  end
+  return gx - spacing
+end
+
+--- Draw with a one-pixel drop shadow underneath.
+function font.drawShadow(canvas, x, y, text, col, shadow, scale, spacing)
+  font.draw(canvas, x + 1, y + 1, text, shadow, scale, spacing)
+  return font.draw(canvas, x, y, text, col, scale, spacing)
+end
+
+--- Centre text horizontally across the whole canvas (or a given span).
+function font.center(canvas, y, text, col, scale, spacing, x0, w)
+  x0 = x0 or 1
+  w = w or canvas.w
+  local tw = font.width(text, scale, spacing)
+  return font.draw(canvas, x0 + math.floor((w - tw) / 2), y, text, col, scale, spacing)
+end
+
+function font.centerShadow(canvas, y, text, col, shadow, scale, spacing, x0, w)
+  x0 = x0 or 1
+  w = w or canvas.w
+  local tw = font.width(text, scale, spacing)
+  local x = x0 + math.floor((w - tw) / 2)
+  font.draw(canvas, x + 1, y + 1, text, shadow, scale, spacing)
+  return font.draw(canvas, x, y, text, col, scale, spacing)
+end
+
+return font
+]=])
+file("os/lib/icons.lua", [=[
+--[[ icons -- small pixel-art app icons drawn on a lib.canvas sub-pixel
+  canvas (2x3 sub-pixels per character cell -- the highest resolution
+  CC:Tweaked's font supports; there's no finer "sub-sub-pixel" than that).
+
+  Each icon occupies an 8x9 pixel box (a 4x3 character cell region) and is
+  drawn with fixed, per-app colours so it stays recognisable across themes,
+  the way a real desktop's app icons don't repaint themselves when you
+  change your wallpaper.
+]]
+
+local icons = {}
+icons.CELLS = { w = 4, h = 3 }
+icons.SIZE = { w = 8, h = 9 }
+
+--- One signature colour per app, used as a small swatch in places too
+--- cramped for real pixel art (titlebars, taskbar buttons).
+icons.COLOR = {
+  about = colors.blue, files = colors.yellow, editor = colors.lightGray,
+  terminal = colors.lime, settings = colors.lightGray, chat = colors.cyan,
+  share = colors.orange, calc = colors.lime, clock = colors.white,
+  notes = colors.yellow, piano = colors.white, snake = colors.green,
+}
+
+local DRAW = {}
+
+function DRAW.about(c, x, y)
+  c:circle(x + 4, y + 4, 4, colors.blue, true)
+  c:fill(x + 4, y + 2, 1, 1, colors.white)
+  c:fill(x + 4, y + 4, 1, 3, colors.white)
+end
+
+function DRAW.files(c, x, y)
+  c:fill(x, y + 1, 4, 2, colors.yellow)
+  c:fill(x, y + 2, 8, 5, colors.yellow)
+  c:box(x, y + 2, 8, 5, colors.brown)
+end
+
+function DRAW.editor(c, x, y)
+  c:fill(x + 1, y, 6, 9, colors.white)
+  c:fill(x + 5, y, 2, 2, colors.lightGray)
+  c:fill(x + 2, y + 3, 4, 1, colors.gray)
+  c:fill(x + 2, y + 5, 4, 1, colors.gray)
+  c:fill(x + 2, y + 7, 3, 1, colors.gray)
+end
+
+function DRAW.terminal(c, x, y)
+  c:fill(x, y, 8, 9, colors.black)
+  c:box(x, y, 8, 9, colors.gray)
+  c:fill(x + 1, y + 2, 1, 1, colors.lime)
+  c:fill(x + 1, y + 4, 3, 1, colors.lime)
+  c:fill(x + 2, y + 6, 3, 1, colors.lime)
+end
+
+function DRAW.settings(c, x, y)
+  c:circle(x + 4, y + 4, 4, colors.lightGray, true)
+  c:fill(x + 3, y, 2, 2, colors.gray)
+  c:fill(x + 3, y + 7, 2, 2, colors.gray)
+  c:fill(x, y + 3, 2, 2, colors.gray)
+  c:fill(x + 7, y + 3, 2, 2, colors.gray)
+  c:circle(x + 4, y + 4, 2, colors.gray, true)
+end
+
+function DRAW.chat(c, x, y)
+  c:fill(x, y, 8, 6, colors.cyan)
+  c:box(x, y, 8, 6, colors.blue)
+  c:fill(x + 1, y + 6, 2, 2, colors.cyan)
+  c:fill(x + 2, y + 2, 1, 1, colors.white)
+  c:fill(x + 4, y + 2, 1, 1, colors.white)
+  c:fill(x + 6, y + 2, 1, 1, colors.white)
+end
+
+function DRAW.share(c, x, y)
+  -- a bold upward arrow: a stepped triangular head over a stem
+  c:fill(x + 3, y, 2, 1, colors.orange)
+  c:fill(x + 2, y + 1, 4, 1, colors.orange)
+  c:fill(x + 1, y + 2, 6, 2, colors.orange)
+  c:fill(x + 3, y + 4, 2, 5, colors.orange)
+end
+
+function DRAW.calc(c, x, y)
+  -- opaque throughout (never relies on the desktop colour showing through,
+  -- since a dark "screen" tone could vanish against a dark theme)
+  c:fill(x, y, 8, 9, colors.lightGray)
+  c:fill(x, y, 8, 3, colors.gray)
+  c:fill(x + 1, y + 1, 5, 1, colors.lime)
+end
+
+function DRAW.clock(c, x, y)
+  c:circle(x + 4, y + 4, 4, colors.white, true)
+  c:fill(x + 4, y + 1, 1, 3, colors.black)
+  c:fill(x + 4, y + 4, 3, 1, colors.black)
+end
+
+function DRAW.notes(c, x, y)
+  c:fill(x, y, 8, 8, colors.yellow)
+  c:fill(x + 5, y, 3, 3, colors.white)
+  c:fill(x + 1, y + 3, 5, 1, colors.orange)
+  c:fill(x + 1, y + 5, 5, 1, colors.orange)
+end
+
+function DRAW.piano(c, x, y)
+  c:fill(x, y + 1, 8, 6, colors.white)
+  c:box(x, y + 1, 8, 6, colors.gray)
+  c:fill(x + 1, y + 1, 1, 4, colors.black)
+  c:fill(x + 3, y + 1, 1, 4, colors.black)
+  c:fill(x + 5, y + 1, 1, 4, colors.black)
+end
+
+function DRAW.snake(c, x, y)
+  c:fill(x, y + 6, 3, 2, colors.lime)
+  c:fill(x + 2, y + 4, 3, 2, colors.lime)
+  c:fill(x + 4, y + 2, 3, 2, colors.lime)
+  c:fill(x + 6, y, 2, 2, colors.lime)
+  c:fill(x, y, 2, 2, colors.red)
+end
+
+function DRAW.default(c, x, y)
+  c:fill(x, y, 8, 9, colors.gray)
+  c:box(x, y, 8, 9, colors.lightGray)
+end
+
+--- Draws the icon for `appId` with its top-left pixel at (x, y) on `canvas`.
+function icons.draw(canvas, appId, x, y)
+  local fn = DRAW[appId] or DRAW.default
+  fn(canvas, x, y)
+end
+
+return icons
 ]=])
 file("os/lib/net.lua", [=[
 --[[ net -- a tiny shared-channel protocol over the modem peripheral, used by

@@ -41,6 +41,12 @@ run "editor, files, calculator, terminal, snake, settings" tests/t_apps.lua
 run "chat + file share over the modem" tests/t_net.lua
 run "alarms + notes" tests/t_clock_notes.lua
 
+echo "== pixel-art icons + boot splash =="
+run "every app icon renders" tests/t_icons.lua
+run "calculator icon (regression: cell-alignment bug)" tests/t_icon_calc.lua
+run "boot splash wordmark" tests/t_splash.lua
+run "desktop + Start menu + taskbar visual smoke test" tests/t_visual.lua
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "ALL TESTS PASSED"

@@ -11,7 +11,7 @@ local function onEvent(ev, procs, focusedId)
     check(#procs == 0, "no windows before launching anything")
     SHOT("menu_open")
     phase = "click_about"
-    click(1, 2, 7) -- "About" is the first entry in the Start menu
+    click(1, 2, 2) -- "About" is the first (top-left) icon in the Start menu grid
 
   elseif phase == "click_about" and ev[1] == "mouse_up" then
     check(#procs == 1, "About window opened")

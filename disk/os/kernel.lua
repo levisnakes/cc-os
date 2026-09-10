@@ -22,6 +22,9 @@ local widgets = req("lib.widgets")
 local data = req("lib.data")
 local appsReg = req("lib.apps")
 local sound = req("lib.sound")
+local Canvas = req("lib.canvas")
+local icons = req("lib.icons")
+local font = req("lib.font")
 
 local kernel = {}
 local MIN_W, MIN_H = 18, 7
@@ -70,15 +73,17 @@ function kernel.run(opts)
   local altHeld = false
 
   --------------------------------------------------------------- desktop icons
-  local icons = {}
+  -- each slot is 9 cols wide (a 4-cell/8px icon plus padding) and 4 rows tall
+  -- (3 cell rows of icon, 1 text row of label underneath)
+  local deskIcons = {}
   do
-    local perCol = math.max(1, math.floor(desktopH / 2))
+    local perCol = math.max(1, math.floor(desktopH / 4))
     for i = 1, #appsReg.list do
       local a = appsReg.list[i]
       local col = math.floor((i - 1) / perCol)
       local row = (i - 1) % perCol
-      icons[#icons + 1] = { appId = a.id, name = a.name, icon = a.icon,
-        x = 1 + col * 9, y = 1 + row * 2 }
+      deskIcons[#deskIcons + 1] = { appId = a.id, name = a.name,
+        x = 1 + col * 9, y = 1 + row * 4 }
     end
   end
   local lastIconClick = { appId = nil, t = -10 }
@@ -367,9 +372,13 @@ function kernel.run(opts)
     term.setTextColor(barFg)
     term.setCursorPos(p.x, p.y)
     term.write(string.rep(" ", p.w))
-    local titleW = p.w - 12
+    term.setBackgroundColor(icons.COLOR[p.appId] or barBg)
+    term.setCursorPos(p.x + 1, p.y)
+    term.write(" ")
+    term.setBackgroundColor(barBg)
+    local titleW = p.w - 14
     if titleW > 0 then
-      term.setCursorPos(p.x + 1, p.y)
+      term.setCursorPos(p.x + 3, p.y)
       local title = (p.crashed and "[!] " or "") .. p.title
       term.write(widgets.clip(title, titleW))
     end
@@ -397,13 +406,14 @@ function kernel.run(opts)
   function drawIcons()
     local th = currentTheme
     term.setBackgroundColor(th.desktop)
-    for i = 1, #icons do
-      local ic = icons[i]
-      term.setTextColor(th.accent2)
-      term.setCursorPos(ic.x, ic.y)
-      term.write("[" .. ic.icon .. "]")
+    for i = 1, #deskIcons do
+      local ic = deskIcons[i]
+      local c = Canvas.new(ic.x, ic.y, icons.CELLS.w, icons.CELLS.h, th.desktop)
+      icons.draw(c, ic.appId, 1, 1)
+      c:render()
+      term.setBackgroundColor(th.desktop)
       term.setTextColor(th.desktopText)
-      term.setCursorPos(ic.x, ic.y + 1)
+      term.setCursorPos(ic.x, ic.y + icons.CELLS.h)
       term.write(widgets.clip(ic.name, 8))
     end
   end
@@ -426,12 +436,16 @@ function kernel.run(opts)
     for i = 1, #procs do
       local p = procs[i]
       local label = " " .. widgets.clip(p.title, 8) .. " "
-      local w = #label
+      local w = #label + 1 -- +1 for the leading colour swatch
       if cx + w > screenW - 7 then break end
       local isFocused = (p.id == focusedId) and not p.minimized
-      term.setBackgroundColor(isFocused and th.taskbarActive or th.taskbar)
-      term.setTextColor(p.crashed and th.err or (isFocused and th.taskbarActiveText or th.taskbarText))
+      local barBg = isFocused and th.taskbarActive or th.taskbar
+      term.setBackgroundColor(icons.COLOR[p.appId] or barBg)
       term.setCursorPos(cx, screenH)
+      term.write(" ")
+      term.setBackgroundColor(barBg)
+      term.setTextColor(p.crashed and th.err or (isFocused and th.taskbarActiveText or th.taskbarText))
+      term.setCursorPos(cx + 1, screenH)
       term.write(label)
       taskbarButtons[#taskbarButtons + 1] = { procId = p.id, x = cx, w = w }
       cx = cx + w + 1
@@ -456,22 +470,36 @@ function kernel.run(opts)
     end
   end
 
+  -- a 4-column icon grid, each cell 9 cols wide (icon + padding) x 4 rows
+  -- tall (3 rows of icon, 1 row of label) -- the same visual language as
+  -- the desktop icons, so the Start menu reads as "more of the same app
+  -- launcher" rather than a different, plainer UI bolted on.
+  local MENU_COLS = 4
   function drawStartMenu()
     if not startMenuOpen then return end
+    local th = currentTheme
     local list = appsReg.list
-    local w = 18
-    for i = 1, #list do w = math.max(w, #list[i].name + 5) end
-    local h = #list
-    local x, y = 1, screenH - h
-    menuRect = { x = x, y = y, w = w, h = h }
+    local w = MENU_COLS * 9
+    local x, y = 1, 1
+    -- the panel covers the full desktop height so it fully occludes
+    -- whatever desktop icons are behind it, not just the grid's own rows
+    menuRect = { x = x, y = y, w = w, h = desktopH }
     menuItems = {}
-    local rows = {}
+    widgets.fill(x, y, w, desktopH, th.chrome)
     for i = 1, #list do
       local a = list[i]
-      rows[i] = a.icon .. "  " .. a.name
-      menuItems[#menuItems + 1] = { x = x, y = y + i - 1, w = w, h = 1, appId = a.id }
+      local col = (i - 1) % MENU_COLS
+      local row = math.floor((i - 1) / MENU_COLS)
+      local cx, cy = x + col * 9, y + row * 4
+      local c = Canvas.new(cx, cy, icons.CELLS.w, icons.CELLS.h, th.chrome)
+      icons.draw(c, a.id, 1, 1)
+      c:render()
+      term.setBackgroundColor(th.chrome)
+      term.setTextColor(th.chromeText)
+      term.setCursorPos(cx, cy + icons.CELLS.h)
+      term.write(widgets.clip(a.name, 8))
+      menuItems[#menuItems + 1] = { x = cx, y = cy, w = 9, h = 4, appId = a.id }
     end
-    drawPopup(x, y, w, rows)
   end
 
   local function drawContextMenu()
@@ -518,9 +546,9 @@ function kernel.run(opts)
   end
 
   local function iconAt(x, y)
-    for i = 1, #icons do
-      local ic = icons[i]
-      if x >= ic.x and x < ic.x + 8 and y >= ic.y and y <= ic.y + 1 then return ic end
+    for i = 1, #deskIcons do
+      local ic = deskIcons[i]
+      if x >= ic.x and x < ic.x + 8 and y >= ic.y and y < ic.y + 4 then return ic end
     end
     return nil
   end
@@ -718,18 +746,11 @@ function kernel.run(opts)
   ------------------------------------------------------------- boot splash
   local function bootSplash()
     if opts.skipSplash then return end
-    term.setBackgroundColor(colors.black)
-    term.setTextColor(colors.white)
-    term.clear()
-    local midY = math.floor(screenH / 2)
-    local label = "cc-OS"
-    term.setTextColor(colors.cyan)
-    term.setCursorPos(math.max(1, math.floor((screenW - #label) / 2)), midY - 1)
-    term.write(label)
-    term.setTextColor(colors.lightGray)
-    local sub = "starting up..."
-    term.setCursorPos(math.max(1, math.floor((screenW - #sub) / 2)), midY + 1)
-    term.write(sub)
+    local full = Canvas.new(1, 1, screenW, screenH, colors.black)
+    local midY = math.floor(full.h / 2)
+    font.centerShadow(full, midY - 9, "CC-OS", colors.cyan, colors.gray, 2, 2)
+    font.center(full, midY + 8, "STARTING UP", colors.lightGray, 1, 1)
+    full:render()
     sound.play("boot")
     os.sleep(opts.splashSeconds or 0.6)
   end
