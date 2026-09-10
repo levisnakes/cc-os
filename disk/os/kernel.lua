@@ -553,7 +553,7 @@ function kernel.run(opts)
     return nil
   end
 
-  local function handlePopupClick(x, y)
+  local function handlePopupClick(btn, x, y)
     -- returns true if the click was consumed by the Start menu / a context menu
     if startMenuOpen then
       startMenuOpen = false
@@ -571,16 +571,20 @@ function kernel.run(opts)
         local item = ctxMenu.items[idx]
         closeContextMenu()
         if item then item.action() end
-      else
-        closeContextMenu()
+        return true
       end
-      return true
+      closeContextMenu()
+      -- a right-click that lands outside the menu closes it but falls
+      -- through to the normal right-click handling below, so right-clicking
+      -- somewhere new re-opens a menu there in one click instead of needing
+      -- a dismiss click followed by a second right-click
+      return btn ~= 2
     end
     return false
   end
 
   function handleMouseClick(btn, x, y)
-    if handlePopupClick(x, y) then return end
+    if handlePopupClick(btn, x, y) then return end
 
     if btn == 2 then -- right click
       if y == screenH then return end
@@ -715,7 +719,12 @@ function kernel.run(opts)
       out[i] = { id = p.id, appId = p.appId, title = p.title, x = p.x, y = p.y, w = p.w, h = p.h,
         minimized = p.minimized, maximized = p.maximized, crashed = p.crashed }
     end
-    return out, focusedId
+    local menus = { startMenuOpen = startMenuOpen, ctxMenuOpen = ctxMenu ~= nil }
+    if ctxMenu then
+      menus.ctxMenuLabels = {}
+      for i = 1, #ctxMenu.items do menus.ctxMenuLabels[i] = ctxMenu.items[i].label end
+    end
+    return out, focusedId, menus
   end
 
   ------------------------------------------------------------------ reaping

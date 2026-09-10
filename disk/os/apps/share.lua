@@ -7,7 +7,7 @@ local widgets = req("lib.widgets")
 
 local M = {}
 M.id = "share"
-M.name = "File Share"
+M.name = "Share"
 
 local RECEIVED_DIR = "/os/data/received"
 

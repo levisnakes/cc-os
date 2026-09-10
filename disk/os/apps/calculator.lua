@@ -1,8 +1,8 @@
 --[[ calculator -- a simple button-grid calculator with keyboard support. ]]
 
 local M = {}
-M.id = "calculator"
-M.name = "Calculator"
+M.id = "calc"
+M.name = "Calc"
 
 local ROWS = {
   { "7", "8", "9", "/" },

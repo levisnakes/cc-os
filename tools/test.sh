@@ -47,6 +47,11 @@ run "calculator icon (regression: cell-alignment bug)" tests/t_icon_calc.lua
 run "boot splash wordmark" tests/t_splash.lua
 run "desktop + Start menu + taskbar visual smoke test" tests/t_visual.lua
 
+echo "== nitpick QA pass =="
+run "piano: all 25 keys fit and are clickable (regression)" tests/t_qa_piano.lua
+run "files: delete requires Y/N confirmation" tests/t_qa_files_delete.lua
+run "context menu: right-click elsewhere reopens in one click" tests/t_qa_ctxmenu.lua
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "ALL TESTS PASSED"

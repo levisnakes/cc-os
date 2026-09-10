@@ -78,8 +78,8 @@ file("os/apps/calculator.lua", [=[
 --[[ calculator -- a simple button-grid calculator with keyboard support. ]]
 
 local M = {}
-M.id = "calculator"
-M.name = "Calculator"
+M.id = "calc"
+M.name = "Calc"
 
 local ROWS = {
   { "7", "8", "9", "/" },
@@ -842,6 +842,23 @@ function M.run(ctx)
     end
   end
 
+  local function confirm(question)
+    local T = api.getTheme()
+    term.setCursorPos(1, h - 1)
+    term.setBackgroundColor(T.err)
+    term.setTextColor(colors.white)
+    term.write(string.rep(" ", w))
+    term.setCursorPos(1, h - 1)
+    term.write(question .. " (Y/N)")
+    while true do
+      local ev = { api.pullEvent() }
+      if ev[1] == "key" then
+        if ev[2] == keys.y then return true end
+        if ev[2] == keys.n or ev[2] == keys.enter or ev[2] == keys.numPadEnter then return false end
+      end
+    end
+  end
+
   local function open(idx)
     local e = entries[idx]
     if not e then return end
@@ -890,9 +907,14 @@ function M.run(ctx)
       elseif k == keys.d then
         local e = entries[selected]
         if e and e.name ~= ".." then
-          fs.delete(fullPath(selected))
-          status = "Deleted " .. e.name
-          refresh()
+          local what = e.dir and (e.name .. "/ and everything in it") or e.name
+          if confirm("Delete " .. what .. "?") then
+            fs.delete(fullPath(selected))
+            status = "Deleted " .. e.name
+            refresh()
+          else
+            status = "Cancelled"
+          end
         end
       elseif k == keys.r then
         local e = entries[selected]
@@ -1140,10 +1162,13 @@ function M.run(ctx)
     end
 
     local n = #KEY_ORDER
-    local keyW = math.max(2, math.floor(w / n))
-    local y = 4
+    local perRow = math.ceil(n / 2)
+    local keyW = math.max(2, math.floor(w / perRow))
     for i = 1, n do
-      local x = (i - 1) * keyW + 1
+      local row = math.floor((i - 1) / perRow)
+      local col = (i - 1) % perRow
+      local x = col * keyW + 1
+      local y = 4 + row * 3
       local pressed = (activeKey == i - 1)
       term.setBackgroundColor(pressed and T.accent or T.field)
       term.setTextColor(pressed and T.chromeFocusText or T.fieldText)
@@ -1189,11 +1214,14 @@ function M.run(ctx)
       end
     elseif kind == "mouse_click" and speaker then
       local x, y = ev[3], ev[4]
-      if y >= 4 and y <= 6 then
-        local n = #KEY_ORDER
-        local keyW = math.max(2, math.floor(w / n))
-        local idx = math.floor((x - 1) / keyW) + 1
-        if idx >= 1 and idx <= n then play(idx - 1) end
+      local n = #KEY_ORDER
+      local perRow = math.ceil(n / 2)
+      local keyW = math.max(2, math.floor(w / perRow))
+      if y >= 4 and y <= 9 then
+        local row = math.floor((y - 4) / 3)
+        local col = math.floor((x - 1) / keyW)
+        local idx = row * perRow + col + 1
+        if idx >= 1 and idx <= n and col >= 0 and col < perRow then play(idx - 1) end
       end
     elseif kind == "timer" and ev[2] == activeTimer then
       activeKey = nil
@@ -1379,7 +1407,7 @@ local widgets = req("lib.widgets")
 
 local M = {}
 M.id = "share"
-M.name = "File Share"
+M.name = "Share"
 
 local RECEIVED_DIR = "/os/data/received"
 
@@ -2386,7 +2414,7 @@ function kernel.run(opts)
     return nil
   end
 
-  local function handlePopupClick(x, y)
+  local function handlePopupClick(btn, x, y)
     -- returns true if the click was consumed by the Start menu / a context menu
     if startMenuOpen then
       startMenuOpen = false
@@ -2404,16 +2432,20 @@ function kernel.run(opts)
         local item = ctxMenu.items[idx]
         closeContextMenu()
         if item then item.action() end
-      else
-        closeContextMenu()
+        return true
       end
-      return true
+      closeContextMenu()
+      -- a right-click that lands outside the menu closes it but falls
+      -- through to the normal right-click handling below, so right-clicking
+      -- somewhere new re-opens a menu there in one click instead of needing
+      -- a dismiss click followed by a second right-click
+      return btn ~= 2
     end
     return false
   end
 
   function handleMouseClick(btn, x, y)
-    if handlePopupClick(x, y) then return end
+    if handlePopupClick(btn, x, y) then return end
 
     if btn == 2 then -- right click
       if y == screenH then return end
@@ -2548,7 +2580,12 @@ function kernel.run(opts)
       out[i] = { id = p.id, appId = p.appId, title = p.title, x = p.x, y = p.y, w = p.w, h = p.h,
         minimized = p.minimized, maximized = p.maximized, crashed = p.crashed }
     end
-    return out, focusedId
+    local menus = { startMenuOpen = startMenuOpen, ctxMenuOpen = ctxMenu ~= nil }
+    if ctxMenu then
+      menus.ctxMenuLabels = {}
+      for i = 1, #ctxMenu.items do menus.ctxMenuLabels[i] = ctxMenu.items[i].label end
+    end
+    return out, focusedId, menus
   end
 
   ------------------------------------------------------------------ reaping
@@ -2692,8 +2729,8 @@ apps.list = {
   { id = "terminal",name = "Terminal",   icon = "T", module = "apps.terminal",   width = 46, height = 17 },
   { id = "settings",name = "Settings",   icon = "S", module = "apps.settings",   width = 40, height = 15 },
   { id = "chat",    name = "Chat",       icon = "C", module = "apps.chat",       width = 42, height = 16 },
-  { id = "share",   name = "File Share", icon = "H", module = "apps.share",      width = 42, height = 16 },
-  { id = "calc",    name = "Calculator", icon = "+", module = "apps.calculator", width = 24, height = 16 },
+  { id = "share",   name = "Share",      icon = "H", module = "apps.share",      width = 42, height = 16 },
+  { id = "calc",    name = "Calc",       icon = "+", module = "apps.calculator", width = 24, height = 16 },
   { id = "clock",   name = "Clock",      icon = "O", module = "apps.clock",      width = 32, height = 14 },
   { id = "notes",   name = "Notes",      icon = "N", module = "apps.notes",      width = 38, height = 17 },
   { id = "piano",   name = "Piano",      icon = "P", module = "apps.piano",      width = 44, height = 12 },

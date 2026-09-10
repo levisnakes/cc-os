@@ -49,9 +49,9 @@ rebooting, run `cc-os`.
 | Terminal | A small shell: `cd ls pwd mkdir rm cp mv cat echo clear run`. |
 | Settings | Pick a theme, adjust volume, 12h/24h clock, username, shut down/reboot. |
 | Chat | Broadcast text chat with every cc-OS computer in modem range. |
-| File Share | Send a file to every computer in range; received files land in `/os/data/received/`. |
-| Calculator | Basic arithmetic, mouse or keyboard. |
-| Clock | Digital clock plus alarms (uses `os.setAlarm`, rings even while the app is closed... while it's open). |
+| Share | Send a file to every computer in range; received files land in `/os/data/received/`. |
+| Calc | Basic arithmetic, mouse or keyboard. |
+| Clock | Digital clock plus alarms (uses `os.setAlarm`; an alarm only fires while Clock is open, minimized is fine). |
 | Notes | A list of sticky text notes. |
 | Piano | Play the attached speaker with the keyboard; several instruments. |
 | Snake | Classic snake, arrow keys, wraps at the edges. |

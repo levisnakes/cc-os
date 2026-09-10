@@ -127,6 +127,23 @@ function M.run(ctx)
     end
   end
 
+  local function confirm(question)
+    local T = api.getTheme()
+    term.setCursorPos(1, h - 1)
+    term.setBackgroundColor(T.err)
+    term.setTextColor(colors.white)
+    term.write(string.rep(" ", w))
+    term.setCursorPos(1, h - 1)
+    term.write(question .. " (Y/N)")
+    while true do
+      local ev = { api.pullEvent() }
+      if ev[1] == "key" then
+        if ev[2] == keys.y then return true end
+        if ev[2] == keys.n or ev[2] == keys.enter or ev[2] == keys.numPadEnter then return false end
+      end
+    end
+  end
+
   local function open(idx)
     local e = entries[idx]
     if not e then return end
@@ -175,9 +192,14 @@ function M.run(ctx)
       elseif k == keys.d then
         local e = entries[selected]
         if e and e.name ~= ".." then
-          fs.delete(fullPath(selected))
-          status = "Deleted " .. e.name
-          refresh()
+          local what = e.dir and (e.name .. "/ and everything in it") or e.name
+          if confirm("Delete " .. what .. "?") then
+            fs.delete(fullPath(selected))
+            status = "Deleted " .. e.name
+            refresh()
+          else
+            status = "Cancelled"
+          end
         end
       elseif k == keys.r then
         local e = entries[selected]

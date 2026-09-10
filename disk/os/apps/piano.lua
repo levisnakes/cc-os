@@ -53,10 +53,13 @@ function M.run(ctx)
     end
 
     local n = #KEY_ORDER
-    local keyW = math.max(2, math.floor(w / n))
-    local y = 4
+    local perRow = math.ceil(n / 2)
+    local keyW = math.max(2, math.floor(w / perRow))
     for i = 1, n do
-      local x = (i - 1) * keyW + 1
+      local row = math.floor((i - 1) / perRow)
+      local col = (i - 1) % perRow
+      local x = col * keyW + 1
+      local y = 4 + row * 3
       local pressed = (activeKey == i - 1)
       term.setBackgroundColor(pressed and T.accent or T.field)
       term.setTextColor(pressed and T.chromeFocusText or T.fieldText)
@@ -102,11 +105,14 @@ function M.run(ctx)
       end
     elseif kind == "mouse_click" and speaker then
       local x, y = ev[3], ev[4]
-      if y >= 4 and y <= 6 then
-        local n = #KEY_ORDER
-        local keyW = math.max(2, math.floor(w / n))
-        local idx = math.floor((x - 1) / keyW) + 1
-        if idx >= 1 and idx <= n then play(idx - 1) end
+      local n = #KEY_ORDER
+      local perRow = math.ceil(n / 2)
+      local keyW = math.max(2, math.floor(w / perRow))
+      if y >= 4 and y <= 9 then
+        local row = math.floor((y - 4) / 3)
+        local col = math.floor((x - 1) / keyW)
+        local idx = row * perRow + col + 1
+        if idx >= 1 and idx <= n and col >= 0 and col < perRow then play(idx - 1) end
       end
     elseif kind == "timer" and ev[2] == activeTimer then
       activeKey = nil
