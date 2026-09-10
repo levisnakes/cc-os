@@ -6,9 +6,9 @@ M.name = "About"
 
 function M.run(ctx)
   local api = ctx.api
-  local th = api.getTheme()
 
   local function draw()
+    local th = api.getTheme()
     local w, h = api.getSize()
     term.setBackgroundColor(th.bg)
     term.setTextColor(th.fg)
@@ -34,6 +34,7 @@ function M.run(ctx)
   draw()
   while true do
     api.pullEvent()
+    draw()
   end
 end
 

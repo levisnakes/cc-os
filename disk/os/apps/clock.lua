@@ -43,12 +43,12 @@ function M.run(ctx)
   end
 
   local firing = nil -- alarm currently ringing, or nil
-  local w, h = api.getSize()
 
   local function fmt2(n) return string.format("%02d", n) end
 
   local function draw()
     local T = api.getTheme()
+    local w, h = api.getSize()
     term.setBackgroundColor(T.bg)
     term.setTextColor(T.fg)
     term.clear()
@@ -103,6 +103,7 @@ function M.run(ctx)
 
   local function prompt(question)
     local T = api.getTheme()
+    local w, h = api.getSize()
     term.setCursorPos(2, h)
     term.setBackgroundColor(T.field)
     term.setTextColor(T.fieldText)

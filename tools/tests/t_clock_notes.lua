@@ -74,7 +74,7 @@ end
 
 MOCK.push("mouse_up", 1, 1, 1) -- harmless kick-off event
 
-local ok, err = pcall(kernel.run, { onEvent = onEvent })
+local ok, err = pcall(kernel.run, { onEvent = onEvent, skipSplash = true, noSession = true })
 if not ok then
   check(tostring(err):find("TEST_DONE", 1, true) ~= nil, "kernel stopped cleanly: " .. tostring(err))
 end

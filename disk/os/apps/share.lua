@@ -14,6 +14,7 @@ local RECEIVED_DIR = "/os/data/received"
 function M.run(ctx)
   local api = ctx.api
   local w, h = api.getSize()
+  local function refreshSize() w, h = api.getSize() end
   local modem, openErr = net.open()
   local field = widgets.newTextField("")
   local log = {}
@@ -112,6 +113,8 @@ function M.run(ctx)
           end
         end
       end
+    elseif kind == "term_resize" then
+      refreshSize()
     end
     draw()
   end

@@ -53,7 +53,7 @@ LOG("  verified " .. count .. " files")
 
 --------------------------------------------------- boot what was unpacked
 local kernel = require_os("kernel")
-local booted, bootErr = pcall(kernel.run, { maxEvents = 1 })
+local booted, bootErr = pcall(kernel.run, { maxEvents = 1, skipSplash = true, noSession = true })
 check(booted, "kernel boots from the freshly-unpacked disk: " .. tostring(bootErr))
 SHOT("fresh_install_desktop")
 

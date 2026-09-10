@@ -26,10 +26,18 @@ rebooting, run `cc-os`.
 ## Using it
 
 - **Start menu**: click `Start` in the bottom-left corner, then click an app.
+- **Desktop icons**: double-click an icon on the desktop to launch it.
 - **Move a window**: drag its titlebar.
-- **Minimize / close**: the `[_]` and `[x]` buttons on the titlebar, or click
-  a window's own button in the taskbar to minimize/restore it.
-- Multiple windows of the same app can be open at once.
+- **Resize**: drag the `\` handle in a window's bottom-right corner.
+- **Minimize / maximize / close**: the `[_]` `[o]` `[x]` titlebar buttons, or
+  click a window's own button in the taskbar to minimize/restore it.
+- **Right-click** a titlebar for Minimize/Maximize/Snap Left/Snap Right/Close;
+  right-click empty desktop for a quick-launch menu.
+- **Alt+Tab** cycles focus between open windows.
+- Multiple windows of the same app can be open at once. Whatever's open (and
+  where) is remembered and reopened next boot.
+- If an app crashes, its window shows the error instead of vanishing -- close
+  it normally when you're done reading it.
 
 ## Bundled apps
 
@@ -88,6 +96,10 @@ buffers to PNGs (`tools/render.py`) for visual review.
   work.
 - `disk/os/lib/` -- shared code: `theme.lua` (colour presets), `widgets.lua`
   (buttons, text fields, list boxes), `data.lua`/`store.lua` (settings and
-  per-app persistence), `net.lua` (the Chat/File Share wire protocol), `apps.lua`
-  (the Start menu registry).
+  per-app persistence), `net.lua` (the Chat/File Share wire protocol),
+  `apps.lua` (the Start menu registry), `sound.lua` (UI sound effects).
 - `disk/os/apps/` -- one file per app.
+
+Resizing/maximizing a window sends the app a `term_resize` event; every
+bundled app re-reads `ctx.api.getSize()` and redraws at the new size (Snake
+is the one deliberate exception -- its grid is fixed for the life of a game).

@@ -32,6 +32,9 @@ run "module registry" tests/t_load.lua
 
 echo "== kernel =="
 run "start menu, drag, minimize, close" tests/t_boot.lua
+run "icons, maximize, resize, crash dialog, context menus, alt-tab" tests/t_wm2.lua
+run "resizing reflows app content" tests/t_resize.lua
+run "session persists and restores across boots" tests/t_session.lua
 
 echo "== apps =="
 run "editor, files, calculator, terminal, snake, settings" tests/t_apps.lua

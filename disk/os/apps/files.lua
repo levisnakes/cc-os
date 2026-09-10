@@ -40,8 +40,12 @@ function M.run(ctx)
     return join(cwd, e.name)
   end
 
-  local w, h = api.getSize()
-  local listH = h - 3
+  local w, h, listH
+  local function refreshSize()
+    w, h = api.getSize()
+    listH = h - 3
+  end
+  refreshSize()
 
   local function draw()
     local T = api.getTheme()
@@ -185,6 +189,8 @@ function M.run(ctx)
           end
         end
       end
+    elseif kind == "term_resize" then
+      refreshSize()
     elseif kind == "os_theme" then
       -- redraw below
     end

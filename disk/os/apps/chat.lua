@@ -9,7 +9,6 @@ M.name = "Chat"
 
 function M.run(ctx)
   local api = ctx.api
-  local w, h = api.getSize()
   local log = {}
   local input = ""
   local modem, err = net.open()
@@ -26,6 +25,7 @@ function M.run(ctx)
 
   local function draw()
     local T = api.getTheme()
+    local w, h = api.getSize()
     term.setBackgroundColor(T.bg)
     term.setTextColor(T.fg)
     term.clear()

@@ -33,7 +33,7 @@ local function onEvent(ev, procs, focusedId)
     SHOT("about_dragged")
     phase = "minimize"
     local p = procs[1]
-    click(1, p.x + p.w - 6, p.y)
+    click(1, p.x + p.w - 8, p.y)
 
   elseif phase == "minimize" and ev[1] == "mouse_up" then
     check(procs[1].minimized == true, "About minimized")
@@ -58,7 +58,7 @@ end
 
 click(1, 1, 19) -- open the Start menu
 
-local ok, err = pcall(kernel.run, { onEvent = onEvent })
+local ok, err = pcall(kernel.run, { onEvent = onEvent, skipSplash = true, noSession = true })
 if not ok then
   check(tostring(err):find("TEST_DONE", 1, true) ~= nil, "kernel stopped cleanly: " .. tostring(err))
 end

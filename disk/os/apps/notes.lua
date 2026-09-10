@@ -30,8 +30,12 @@ function M.run(ctx)
   local selected = 1
   local top = 0
   local mode = "list" -- "list" | "edit"
-  local w, h = api.getSize()
-  local listH = h - 3
+  local w, h, listH
+  local function refreshSize()
+    w, h = api.getSize()
+    listH = h - 3
+  end
+  refreshSize()
 
   local function titleOf(n)
     local first = (n.text or ""):match("^[^\n]*") or ""
@@ -109,7 +113,9 @@ function M.run(ctx)
   while true do
     local ev = { api.pullEvent() }
     local kind = ev[1]
-    if mode == "list" then
+    if kind == "term_resize" then
+      refreshSize()
+    elseif mode == "list" then
       if kind == "key" then
         local k = ev[2]
         if k == keys.down then selected = math.min(#notes, selected + 1)

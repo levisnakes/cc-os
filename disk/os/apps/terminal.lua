@@ -28,8 +28,12 @@ function M.run(ctx)
   local history = {}
   local histPos = 0
 
-  local w, h = api.getSize()
-  local outH = h - 1
+  local w, h, outH
+  local function refreshSize()
+    w, h = api.getSize()
+    outH = h - 1
+  end
+  refreshSize()
 
   local function log(text)
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
@@ -169,6 +173,8 @@ function M.run(ctx)
       end
     elseif kind == "mouse_scroll" then
       -- no-op: scrollback always shows the tail; nothing to scroll to yet
+    elseif kind == "term_resize" then
+      refreshSize()
     end
     draw()
   end

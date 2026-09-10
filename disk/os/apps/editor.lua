@@ -77,10 +77,13 @@ function M.run(ctx)
   local modified = false
   local status = ""
 
-  local w, h = api.getSize()
   local gutter = 4
-  local textW = w - gutter
-  local textH = h - 1
+  local w, h, textW, textH
+  local function refreshSize()
+    w, h = api.getSize()
+    textW, textH = w - gutter, h - 1
+  end
+  refreshSize()
 
   local function highlight(lineText, useColor)
     if not useColor then
@@ -245,6 +248,8 @@ function M.run(ctx)
       end
     elseif kind == "mouse_scroll" then
       scrollY = math.max(0, scrollY + ev[2] * 2)
+    elseif kind == "term_resize" then
+      refreshSize()
     elseif kind == "os_theme" then
       -- redraw below
     end

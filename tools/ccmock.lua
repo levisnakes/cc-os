@@ -248,7 +248,30 @@ function window.create(parent, px, py, w, h, visible)
   function win.redraw() flush() end
   function win.restoreCursor() end
   function win.getPosition() return px, py end
-  function win.reposition(nx, ny) px, py = nx, ny flush() end
+  --- Matches real CC:Tweaked: reposition(x, y, [width, height, [parent]]).
+  --- Resizing mutates `buf` in place (not by replacing the table) since
+  --- makeTerm's own closures (write/getSize/etc) close over this exact table.
+  function win.reposition(nx, ny, nw, nh, nparent)
+    px, py = nx, ny
+    if nparent then parent = nparent end
+    if nw and nh and (nw ~= w or nh ~= h) then
+      local nch, nfg, nbg = {}, {}, {}
+      for y = 1, nh do
+        local cr, fr, br = {}, {}, {}
+        for x = 1, nw do
+          if y <= buf.h and x <= buf.w then
+            cr[x], fr[x], br[x] = buf.ch[y][x], buf.fg[y][x], buf.bg[y][x]
+          else
+            cr[x], fr[x], br[x] = " ", "0", "f"
+          end
+        end
+        nch[y], nfg[y], nbg[y] = cr, fr, br
+      end
+      buf.ch, buf.fg, buf.bg, buf.w, buf.h = nch, nfg, nbg, nw, nh
+      w, h = nw, nh
+    end
+    flush()
+  end
   local setPal = win.setPaletteColor
   win.setPaletteColor = function(...) setPal(...) parent.setPaletteColor(...) end
   win.setPaletteColour = win.setPaletteColor

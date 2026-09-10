@@ -15,6 +15,7 @@ function M.run(ctx)
 
   local w, h = api.getSize()
   local rows = {} -- populated each draw(): {y=, kind=, ...}
+  local function refreshSize() w, h = api.getSize() end
 
   local function th() return api.getTheme() end
 
@@ -148,6 +149,9 @@ function M.run(ctx)
         draw()
       end
     elseif kind == "os_theme" then
+      draw()
+    elseif kind == "term_resize" then
+      refreshSize()
       draw()
     end
   end

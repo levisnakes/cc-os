@@ -6,6 +6,9 @@ M.name = "Snake"
 
 function M.run(ctx)
   local api = ctx.api
+  -- the grid is sized once at launch and deliberately doesn't follow
+  -- mid-game resizes: regridding a live snake (and its food) safely is more
+  -- trouble than it's worth, so a resize just leaves extra blank border.
   local w, h = api.getSize()
   local gx, gy = w, h - 1 -- playfield size; row 1 is the score bar
 

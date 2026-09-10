@@ -31,7 +31,9 @@ function M.run(ctx)
   local activeKey = nil
   local activeTimer = nil
 
-  local w, h = api.getSize()
+  local w, h
+  local function refreshSize() w, h = api.getSize() end
+  refreshSize()
 
   local function draw()
     local T = api.getTheme()
@@ -109,6 +111,8 @@ function M.run(ctx)
     elseif kind == "timer" and ev[2] == activeTimer then
       activeKey = nil
       activeTimer = nil
+    elseif kind == "term_resize" then
+      refreshSize()
     end
     draw()
   end
