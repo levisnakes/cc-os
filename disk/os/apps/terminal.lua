@@ -35,10 +35,14 @@ function M.run(ctx)
   end
   refreshSize()
 
+  local scrollOffset = 0 -- lines back from the newest; 0 = pinned to the tail
+  local function maxScroll() return math.max(0, #out - outH) end
+
   local function log(text)
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
       out[#out + 1] = line
     end
+    scrollOffset = 0 -- new output snaps the view back to the live tail
   end
 
   local function draw()
@@ -46,7 +50,8 @@ function M.run(ctx)
     term.setBackgroundColor(T.bg)
     term.setTextColor(T.fg)
     term.clear()
-    local first = math.max(1, #out - outH + 1)
+    scrollOffset = math.min(scrollOffset, maxScroll())
+    local first = math.max(1, #out - outH + 1 - scrollOffset)
     for row = 0, outH - 1 do
       local idx = first + row
       if out[idx] then
@@ -61,12 +66,19 @@ function M.run(ctx)
     term.setTextColor(T.chromeText)
     term.write(string.rep(" ", w))
     term.setCursorPos(1, h)
-    local prompt = "/" .. cwd .. "> "
-    local visible = prompt .. input
-    if #visible > w then visible = visible:sub(#visible - w + 1) end
-    term.write(visible)
-    term.setCursorPos(math.min(w, #visible + 1), h)
-    term.setCursorBlink(true)
+    if scrollOffset > 0 then
+      local tag = " -- scrolled, " .. scrollOffset .. " -- "
+      term.setTextColor(T.warn)
+      term.write(tag:sub(1, w))
+      term.setTextColor(T.chromeText)
+    else
+      local prompt = "/" .. cwd .. "> "
+      local visible = prompt .. input
+      if #visible > w then visible = visible:sub(#visible - w + 1) end
+      term.write(visible)
+      term.setCursorPos(math.min(w, #visible + 1), h)
+      term.setCursorBlink(true)
+    end
   end
 
   local function cmdLs(args)
@@ -149,8 +161,10 @@ function M.run(ctx)
     local kind = ev[1]
     if kind == "char" then
       input = input .. ev[2]
+      scrollOffset = 0
     elseif kind == "key" then
       local k = ev[2]
+      scrollOffset = 0
       if k == keys.backspace then
         input = input:sub(1, -2)
       elseif k == keys.enter or k == keys.numPadEnter then
@@ -172,7 +186,7 @@ function M.run(ctx)
         end
       end
     elseif kind == "mouse_scroll" then
-      -- no-op: scrollback always shows the tail; nothing to scroll to yet
+      scrollOffset = math.max(0, math.min(maxScroll(), scrollOffset - ev[2] * 3))
     elseif kind == "term_resize" then
       refreshSize()
     end

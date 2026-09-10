@@ -3,7 +3,7 @@
 local apps = {}
 
 apps.list = {
-  { id = "about",   name = "About",      icon = "i", module = "apps.about",      width = 36, height = 12 },
+  { id = "about",   name = "About",      icon = "i", module = "apps.about",      width = 40, height = 18 },
   { id = "files",   name = "Files",      icon = "F", module = "apps.files",      width = 46, height = 17 },
   { id = "editor",  name = "Editor",     icon = "E", module = "apps.editor",     width = 48, height = 18 },
   { id = "terminal",name = "Terminal",   icon = "T", module = "apps.terminal",   width = 46, height = 17 },

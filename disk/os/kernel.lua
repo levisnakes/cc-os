@@ -257,6 +257,10 @@ function kernel.run(opts)
     function api.launch(appId, args) return launch(appId, args) end
     function api.getSettings() return data end
     function api.sound(name) sound.play(name) end
+    --- Lets an app pull in shared os libraries (lib.canvas, lib.icons,
+    --- lib.font, lib.widgets, ...) the same way the kernel does, so apps
+    --- aren't stuck re-implementing pixel art / widgets from scratch.
+    function api.require(name) return req(name) end
     return api
   end
 

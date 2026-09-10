@@ -211,6 +211,8 @@ function M.run(ctx)
           end
         end
       end
+    elseif kind == "mouse_scroll" then
+      selected = math.max(1, math.min(#entries, selected + ev[2]))
     elseif kind == "term_resize" then
       refreshSize()
     elseif kind == "os_theme" then

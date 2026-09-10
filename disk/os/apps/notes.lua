@@ -109,6 +109,23 @@ function M.run(ctx)
     if mode == "list" then drawList() else drawEdit(notes[selected]) end
   end
 
+  local function confirmDelete(n)
+    local T = api.getTheme()
+    term.setCursorPos(1, h)
+    term.setBackgroundColor(T.err)
+    term.setTextColor(colors.white)
+    term.write(string.rep(" ", w))
+    term.setCursorPos(1, h)
+    term.write("Delete \"" .. titleOf(n) .. "\"? (Y/N)")
+    while true do
+      local ev = { api.pullEvent() }
+      if ev[1] == "key" then
+        if ev[2] == keys.y then return true end
+        if ev[2] == keys.n or ev[2] == keys.enter or ev[2] == keys.numPadEnter then return false end
+      end
+    end
+  end
+
   draw()
   while true do
     local ev = { api.pullEvent() }
@@ -128,7 +145,7 @@ function M.run(ctx)
         elseif k == keys.enter or k == keys.numPadEnter then
           if notes[selected] then mode = "edit" end
         elseif k == keys.d then
-          if notes[selected] then
+          if notes[selected] and confirmDelete(notes[selected]) then
             table.remove(notes, selected)
             save_(notes)
           end
@@ -141,6 +158,8 @@ function M.run(ctx)
             if idx == selected then mode = "edit" else selected = idx end
           end
         end
+      elseif kind == "mouse_scroll" then
+        selected = math.max(1, math.min(#notes, selected + ev[2]))
       end
     else -- edit mode
       local n = notes[selected]

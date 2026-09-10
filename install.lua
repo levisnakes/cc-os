@@ -32,37 +32,98 @@ end
 shell.run("/os/boot.lua")
 ]])
 file("os/apps/about.lua", [=[
---[[ about -- version info and a live event log, useful as a smoke-test app. ]]
+--[[ about -- a small pixel-art masthead plus version info, shortcuts, and
+  the bundled app list. Doubles as a smoke-test app: it exercises the same
+  api.require() path any app can use to pull in lib.canvas/lib.icons/lib.font
+  for real graphics instead of plain text.
+]]
 
 local M = {}
 M.id = "about"
 M.name = "About"
 
+local VERSION = "1.0.0"
+
+local SHORTCUTS = {
+  "Drag a titlebar to move a window",
+  "[_] [o] [x] minimize / maximize / close",
+  "Drag a window's corner to resize it",
+  "Right-click for a context menu",
+  "Alt+Tab cycles focus between windows",
+}
+
+--- Splits text into lines no wider than `width`, breaking on spaces
+--- (never mid-word, except a single word that's wider than `width` alone).
+local function wrap(text, width)
+  local lines, cur = {}, ""
+  for word in text:gmatch("%S+") do
+    local candidate = (cur == "" and word) or (cur .. " " .. word)
+    if #candidate <= width then
+      cur = candidate
+    else
+      if cur ~= "" then lines[#lines + 1] = cur end
+      cur = (#word <= width) and word or word:sub(1, width)
+    end
+  end
+  if cur ~= "" then lines[#lines + 1] = cur end
+  return lines
+end
+
 function M.run(ctx)
   local api = ctx.api
+  local Canvas = api.require("lib.canvas")
+  local font = api.require("lib.font")
+  local icons = api.require("lib.icons")
+  local appsReg = api.require("lib.apps")
 
   local function draw()
-    local th = api.getTheme()
+    local T = api.getTheme()
     local w, h = api.getSize()
-    term.setBackgroundColor(th.bg)
-    term.setTextColor(th.fg)
+    term.setBackgroundColor(T.bg)
+    term.setTextColor(T.fg)
     term.clear()
-    term.setCursorPos(2, 2)
-    term.setTextColor(th.accent)
-    term.write("cc-OS")
-    term.setTextColor(th.fg)
-    term.setCursorPos(2, 3)
-    term.write("version 1.0.0")
-    term.setCursorPos(2, 5)
-    term.write("A windowed, multitasking desktop")
-    term.setCursorPos(2, 6)
-    term.write("for CC:Tweaked advanced computers.")
-    term.setCursorPos(2, 8)
-    term.write("Drag titlebars to move windows.")
-    term.setCursorPos(2, 9)
-    term.write("[_] minimizes, [x] closes.")
-    term.setCursorPos(2, h - 1)
-    term.setTextColor(th.desktopText)
+
+    -- masthead: the About icon plus a small "CC-OS" wordmark, side by side
+    local head = Canvas.new(1, 1, math.min(w, 20), icons.CELLS.h, T.bg)
+    icons.draw(head, "about", 1, 1)
+    font.draw(head, icons.SIZE.w + 4, 2, "CC-OS", T.accent, 1, 1)
+    head:render()
+
+    term.setTextColor(T.fg)
+    term.setCursorPos(2, icons.CELLS.h + 1)
+    term.write("version " .. VERSION)
+
+    local textW = w - 2
+    local shortcutLines = {}
+    for i = 1, #SHORTCUTS do
+      local wrapped = wrap(SHORTCUTS[i], textW)
+      for j = 1, #wrapped do shortcutLines[#shortcutLines + 1] = wrapped[j] end
+    end
+
+    local y = icons.CELLS.h + 3
+    term.setTextColor(T.accent2)
+    term.setCursorPos(2, y)
+    term.write(#appsReg.list .. " bundled apps:")
+    term.setTextColor(T.desktopText)
+    local names = {}
+    for i = 1, #appsReg.list do names[#names + 1] = appsReg.list[i].name end
+    local appLines = wrap(table.concat(names, "  "), textW)
+    y = y + 1
+    local appLimit = h - #shortcutLines - 1
+    for i = 1, #appLines do
+      if y >= appLimit then break end
+      term.setCursorPos(2, y)
+      term.write(appLines[i])
+      y = y + 1
+    end
+
+    y = h - #shortcutLines
+    term.setTextColor(T.fg)
+    for i = 1, #shortcutLines do
+      term.setCursorPos(2, y)
+      term.write(shortcutLines[i])
+      y = y + 1
+    end
   end
 
   draw()
@@ -926,6 +987,8 @@ function M.run(ctx)
           end
         end
       end
+    elseif kind == "mouse_scroll" then
+      selected = math.max(1, math.min(#entries, selected + ev[2]))
     elseif kind == "term_resize" then
       refreshSize()
     elseif kind == "os_theme" then
@@ -1049,6 +1112,23 @@ function M.run(ctx)
     if mode == "list" then drawList() else drawEdit(notes[selected]) end
   end
 
+  local function confirmDelete(n)
+    local T = api.getTheme()
+    term.setCursorPos(1, h)
+    term.setBackgroundColor(T.err)
+    term.setTextColor(colors.white)
+    term.write(string.rep(" ", w))
+    term.setCursorPos(1, h)
+    term.write("Delete \"" .. titleOf(n) .. "\"? (Y/N)")
+    while true do
+      local ev = { api.pullEvent() }
+      if ev[1] == "key" then
+        if ev[2] == keys.y then return true end
+        if ev[2] == keys.n or ev[2] == keys.enter or ev[2] == keys.numPadEnter then return false end
+      end
+    end
+  end
+
   draw()
   while true do
     local ev = { api.pullEvent() }
@@ -1068,7 +1148,7 @@ function M.run(ctx)
         elseif k == keys.enter or k == keys.numPadEnter then
           if notes[selected] then mode = "edit" end
         elseif k == keys.d then
-          if notes[selected] then
+          if notes[selected] and confirmDelete(notes[selected]) then
             table.remove(notes, selected)
             save_(notes)
           end
@@ -1081,6 +1161,8 @@ function M.run(ctx)
             if idx == selected then mode = "edit" else selected = idx end
           end
         end
+      elseif kind == "mouse_scroll" then
+        selected = math.max(1, math.min(#notes, selected + ev[2]))
       end
     else -- edit mode
       local n = notes[selected]
@@ -1665,10 +1747,14 @@ function M.run(ctx)
   end
   refreshSize()
 
+  local scrollOffset = 0 -- lines back from the newest; 0 = pinned to the tail
+  local function maxScroll() return math.max(0, #out - outH) end
+
   local function log(text)
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
       out[#out + 1] = line
     end
+    scrollOffset = 0 -- new output snaps the view back to the live tail
   end
 
   local function draw()
@@ -1676,7 +1762,8 @@ function M.run(ctx)
     term.setBackgroundColor(T.bg)
     term.setTextColor(T.fg)
     term.clear()
-    local first = math.max(1, #out - outH + 1)
+    scrollOffset = math.min(scrollOffset, maxScroll())
+    local first = math.max(1, #out - outH + 1 - scrollOffset)
     for row = 0, outH - 1 do
       local idx = first + row
       if out[idx] then
@@ -1691,12 +1778,19 @@ function M.run(ctx)
     term.setTextColor(T.chromeText)
     term.write(string.rep(" ", w))
     term.setCursorPos(1, h)
-    local prompt = "/" .. cwd .. "> "
-    local visible = prompt .. input
-    if #visible > w then visible = visible:sub(#visible - w + 1) end
-    term.write(visible)
-    term.setCursorPos(math.min(w, #visible + 1), h)
-    term.setCursorBlink(true)
+    if scrollOffset > 0 then
+      local tag = " -- scrolled, " .. scrollOffset .. " -- "
+      term.setTextColor(T.warn)
+      term.write(tag:sub(1, w))
+      term.setTextColor(T.chromeText)
+    else
+      local prompt = "/" .. cwd .. "> "
+      local visible = prompt .. input
+      if #visible > w then visible = visible:sub(#visible - w + 1) end
+      term.write(visible)
+      term.setCursorPos(math.min(w, #visible + 1), h)
+      term.setCursorBlink(true)
+    end
   end
 
   local function cmdLs(args)
@@ -1779,8 +1873,10 @@ function M.run(ctx)
     local kind = ev[1]
     if kind == "char" then
       input = input .. ev[2]
+      scrollOffset = 0
     elseif kind == "key" then
       local k = ev[2]
+      scrollOffset = 0
       if k == keys.backspace then
         input = input:sub(1, -2)
       elseif k == keys.enter or k == keys.numPadEnter then
@@ -1802,7 +1898,7 @@ function M.run(ctx)
         end
       end
     elseif kind == "mouse_scroll" then
-      -- no-op: scrollback always shows the tail; nothing to scroll to yet
+      scrollOffset = math.max(0, math.min(maxScroll(), scrollOffset - ev[2] * 3))
     elseif kind == "term_resize" then
       refreshSize()
     end
@@ -2118,6 +2214,10 @@ function kernel.run(opts)
     function api.launch(appId, args) return launch(appId, args) end
     function api.getSettings() return data end
     function api.sound(name) sound.play(name) end
+    --- Lets an app pull in shared os libraries (lib.canvas, lib.icons,
+    --- lib.font, lib.widgets, ...) the same way the kernel does, so apps
+    --- aren't stuck re-implementing pixel art / widgets from scratch.
+    function api.require(name) return req(name) end
     return api
   end
 
@@ -2723,7 +2823,7 @@ file("os/lib/apps.lua", [=[
 local apps = {}
 
 apps.list = {
-  { id = "about",   name = "About",      icon = "i", module = "apps.about",      width = 36, height = 12 },
+  { id = "about",   name = "About",      icon = "i", module = "apps.about",      width = 40, height = 18 },
   { id = "files",   name = "Files",      icon = "F", module = "apps.files",      width = 46, height = 17 },
   { id = "editor",  name = "Editor",     icon = "E", module = "apps.editor",     width = 48, height = 18 },
   { id = "terminal",name = "Terminal",   icon = "T", module = "apps.terminal",   width = 46, height = 17 },
