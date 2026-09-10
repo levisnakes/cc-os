@@ -170,6 +170,30 @@ function M.run(ctx)
   end
 
   local ctrl = false
+
+  --- Asks Y/N (Enter also counts as "no", the safe default) before an
+  --- action that would discard unsaved edits.
+  local function confirmDiscard(question)
+    local T = api.getTheme()
+    term.setCursorPos(1, h)
+    term.setBackgroundColor(T.err)
+    term.setTextColor(colors.white)
+    term.write(string.rep(" ", w))
+    term.setCursorPos(1, h)
+    term.write(question .. " (Y/N)")
+    while true do
+      local ev = { api.pullEvent() }
+      if ev[1] == "key" then
+        if ev[2] == keys.y then return true end
+        if ev[2] == keys.n or ev[2] == keys.enter or ev[2] == keys.numPadEnter then return false end
+      elseif ev[1] == "key_up" and (ev[2] == keys.leftCtrl or ev[2] == keys.rightCtrl) then
+        -- keep modifier tracking correct even if Ctrl is released while
+        -- this dialog is up, so a stale "ctrl held" doesn't linger after
+        ctrl = false
+      end
+    end
+  end
+
   draw()
   while true do
     local ev = { api.pullEvent() }
@@ -187,7 +211,7 @@ function M.run(ctx)
       elseif ctrl and k == keys.s then
         save()
       elseif ctrl and k == keys.q then
-        api.exit()
+        if not modified or confirmDiscard("Discard unsaved changes?") then api.exit() end
       elseif k == keys.left then
         if cx > 1 then cx = cx - 1 elseif cy > 1 then cy = cy - 1 cx = #lines[cy] + 1 end
       elseif k == keys.right then

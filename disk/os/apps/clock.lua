@@ -124,6 +124,24 @@ function M.run(ctx)
     end
   end
 
+  local function confirm(question)
+    local T = api.getTheme()
+    local w, h = api.getSize()
+    term.setCursorPos(2, h)
+    term.setBackgroundColor(T.err)
+    term.setTextColor(colors.white)
+    term.write(string.rep(" ", w - 2))
+    term.setCursorPos(2, h)
+    term.write(question .. " (Y/N)")
+    while true do
+      local ev = { api.pullEvent() }
+      if ev[1] == "key" then
+        if ev[2] == keys.y then return true end
+        if ev[2] == keys.n or ev[2] == keys.enter or ev[2] == keys.numPadEnter then return false end
+      end
+    end
+  end
+
   local selected = 1
   armAll()
   draw()
@@ -151,7 +169,8 @@ function M.run(ctx)
           armAll()
         end
       elseif k == keys.x then
-        if alarms[selected] then
+        local a = alarms[selected]
+        if a and confirm(string.format("Remove %02d:%02d alarm?", a.hour, a.minute)) then
           table.remove(alarms, selected)
           saveAlarms(alarms)
           armAll()

@@ -54,6 +54,8 @@ run "context menu: right-click elsewhere reopens in one click" tests/t_qa_ctxmen
 run "terminal: real scrollback instead of a dead mouse wheel" tests/t_qa_terminal_scroll.lua
 run "notes: delete requires Y/N confirmation" tests/t_qa_notes_delete.lua
 run "about: redesigned masthead + word-wrapped content" tests/t_qa_about.lua
+run "editor: ^Q confirms before discarding unsaved edits" tests/t_qa_editor_quit.lua
+run "clock: removing an alarm requires Y/N confirmation" tests/t_qa_clock_delete.lua
 
 echo
 if [ "$fail" -eq 0 ]; then
