@@ -20,7 +20,10 @@ function M.run(ctx)
   local log = {}
   local transfers = {}
 
-  local function push(text) log[#log + 1] = text end
+  local function push(text)
+    local wrapped = widgets.wrap(text, math.max(10, w - 2))
+    for i = 1, #wrapped do log[#log + 1] = wrapped[i] end
+  end
 
   if not modem then
     push("No modem attached: " .. tostring(openErr))

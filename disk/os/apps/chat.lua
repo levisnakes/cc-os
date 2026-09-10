@@ -2,6 +2,7 @@
 
 local req = ...
 local net = req("lib.net")
+local widgets = req("lib.widgets")
 
 local M = {}
 M.id = "chat"
@@ -14,7 +15,13 @@ function M.run(ctx)
   local modem, err = net.open()
 
   local function push(sender, text)
-    log[#log + 1] = sender .. ": " .. text
+    local w = api.getSize()
+    local prefix = sender .. ": "
+    local wrapped = widgets.wrap(text, math.max(10, w - #prefix))
+    log[#log + 1] = prefix .. wrapped[1]
+    for i = 2, #wrapped do
+      log[#log + 1] = string.rep(" ", #prefix) .. wrapped[i]
+    end
   end
 
   if not modem then

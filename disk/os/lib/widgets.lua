@@ -36,6 +36,24 @@ function widgets.clip(str, w)
   return str .. string.rep(" ", w - #str)
 end
 
+--- Splits `text` into lines no wider than `width`, breaking on spaces
+--- (never mid-word, except a single word wider than `width` on its own).
+function widgets.wrap(text, width)
+  local lines, cur = {}, ""
+  for word in tostring(text):gmatch("%S+") do
+    local candidate = (cur == "" and word) or (cur .. " " .. word)
+    if #candidate <= width then
+      cur = candidate
+    else
+      if cur ~= "" then lines[#lines + 1] = cur end
+      cur = (#word <= width) and word or word:sub(1, width)
+    end
+  end
+  if cur ~= "" then lines[#lines + 1] = cur end
+  if #lines == 0 then lines = { "" } end
+  return lines
+end
+
 ------------------------------------------------------------------- buttons
 function widgets.button(x, y, w, label, bg, fg)
   widgets.fill(x, y, w, 1, bg)

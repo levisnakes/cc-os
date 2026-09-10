@@ -18,29 +18,14 @@ local SHORTCUTS = {
   "Alt+Tab cycles focus between windows",
 }
 
---- Splits text into lines no wider than `width`, breaking on spaces
---- (never mid-word, except a single word that's wider than `width` alone).
-local function wrap(text, width)
-  local lines, cur = {}, ""
-  for word in text:gmatch("%S+") do
-    local candidate = (cur == "" and word) or (cur .. " " .. word)
-    if #candidate <= width then
-      cur = candidate
-    else
-      if cur ~= "" then lines[#lines + 1] = cur end
-      cur = (#word <= width) and word or word:sub(1, width)
-    end
-  end
-  if cur ~= "" then lines[#lines + 1] = cur end
-  return lines
-end
-
 function M.run(ctx)
   local api = ctx.api
   local Canvas = api.require("lib.canvas")
   local font = api.require("lib.font")
   local icons = api.require("lib.icons")
   local appsReg = api.require("lib.apps")
+  local widgets = api.require("lib.widgets")
+  local wrap = widgets.wrap
 
   local function draw()
     local T = api.getTheme()

@@ -52,29 +52,14 @@ local SHORTCUTS = {
   "Alt+Tab cycles focus between windows",
 }
 
---- Splits text into lines no wider than `width`, breaking on spaces
---- (never mid-word, except a single word that's wider than `width` alone).
-local function wrap(text, width)
-  local lines, cur = {}, ""
-  for word in text:gmatch("%S+") do
-    local candidate = (cur == "" and word) or (cur .. " " .. word)
-    if #candidate <= width then
-      cur = candidate
-    else
-      if cur ~= "" then lines[#lines + 1] = cur end
-      cur = (#word <= width) and word or word:sub(1, width)
-    end
-  end
-  if cur ~= "" then lines[#lines + 1] = cur end
-  return lines
-end
-
 function M.run(ctx)
   local api = ctx.api
   local Canvas = api.require("lib.canvas")
   local font = api.require("lib.font")
   local icons = api.require("lib.icons")
   local appsReg = api.require("lib.apps")
+  local widgets = api.require("lib.widgets")
+  local wrap = widgets.wrap
 
   local function draw()
     local T = api.getTheme()
@@ -256,6 +241,7 @@ file("os/apps/chat.lua", [=[
 
 local req = ...
 local net = req("lib.net")
+local widgets = req("lib.widgets")
 
 local M = {}
 M.id = "chat"
@@ -268,7 +254,13 @@ function M.run(ctx)
   local modem, err = net.open()
 
   local function push(sender, text)
-    log[#log + 1] = sender .. ": " .. text
+    local w = api.getSize()
+    local prefix = sender .. ": "
+    local wrapped = widgets.wrap(text, math.max(10, w - #prefix))
+    log[#log + 1] = prefix .. wrapped[1]
+    for i = 2, #wrapped do
+      log[#log + 1] = string.rep(" ", #prefix) .. wrapped[i]
+    end
   end
 
   if not modem then
@@ -1545,7 +1537,10 @@ function M.run(ctx)
   local log = {}
   local transfers = {}
 
-  local function push(text) log[#log + 1] = text end
+  local function push(text)
+    local wrapped = widgets.wrap(text, math.max(10, w - 2))
+    for i = 1, #wrapped do log[#log + 1] = wrapped[i] end
+  end
 
   if not modem then
     push("No modem attached: " .. tostring(openErr))
@@ -3723,6 +3718,24 @@ function widgets.clip(str, w)
     return str:sub(1, w - 2) .. ".."
   end
   return str .. string.rep(" ", w - #str)
+end
+
+--- Splits `text` into lines no wider than `width`, breaking on spaces
+--- (never mid-word, except a single word wider than `width` on its own).
+function widgets.wrap(text, width)
+  local lines, cur = {}, ""
+  for word in tostring(text):gmatch("%S+") do
+    local candidate = (cur == "" and word) or (cur .. " " .. word)
+    if #candidate <= width then
+      cur = candidate
+    else
+      if cur ~= "" then lines[#lines + 1] = cur end
+      cur = (#word <= width) and word or word:sub(1, width)
+    end
+  end
+  if cur ~= "" then lines[#lines + 1] = cur end
+  if #lines == 0 then lines = { "" } end
+  return lines
 end
 
 ------------------------------------------------------------------- buttons

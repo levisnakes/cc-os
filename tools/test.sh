@@ -56,6 +56,13 @@ run "notes: delete requires Y/N confirmation" tests/t_qa_notes_delete.lua
 run "about: redesigned masthead + word-wrapped content" tests/t_qa_about.lua
 run "editor: ^Q confirms before discarding unsaved edits" tests/t_qa_editor_quit.lua
 run "clock: removing an alarm requires Y/N confirmation" tests/t_qa_clock_delete.lua
+run "chat: long messages wrap instead of clipping mid-word" tests/t_qa_chat.lua
+run "share: long messages wrap instead of clipping mid-word" tests/t_qa_share.lua
+
+echo "== per-app launch smoke tests =="
+run "settings launches cleanly" tests/t_qa_settings.lua
+run "clock launches cleanly" tests/t_qa_clock.lua
+run "snake launches cleanly" tests/t_qa_snake.lua
 
 echo
 if [ "$fail" -eq 0 ]; then
